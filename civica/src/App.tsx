@@ -164,6 +164,13 @@ const App: React.FC = () => {
                   <Route path="dashboard" element={<ResponderDashboard />} />
                   <Route path="inspections" element={<ResponderInspections />} />
                   <Route path="inspections/:id" element={<ResponderInspectionDetail />} />
+                  <Route path="escalations" element={<ResponderEscalations />} />
+                  <Route path="escalations/:id" element={<ResponderEscalationDetail />} />
+                  <Route path="compliance" element={<ResponderCompliance />} />
+                  <Route path="compliance/:officeId" element={<ResponderComplianceDetail />} />
+                  <Route path="analytics" element={<ResponderAnalytics />} />
+                  <Route path="reports" element={<ResponderReports />} />
+                  <Route path="violations" element={<ResponderViolations />} />
                   <Route path="*" element={<Navigate to="/responder/dashboard" replace />} />
                 </Routes>
               </main>
