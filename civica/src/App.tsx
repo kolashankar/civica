@@ -174,6 +174,9 @@ const App: React.FC = () => {
                   <Route path="analytics" element={<ResponderAnalytics />} />
                   <Route path="reports" element={<ResponderReports />} />
                   <Route path="violations" element={<ResponderViolations />} />
+                  <Route path="notifications" element={<ResponderNotifications />} />
+                  <Route path="profile" element={<ResponderProfile />} />
+                  <Route path="settings" element={<ResponderSettings />} />
                   <Route path="*" element={<Navigate to="/responder/dashboard" replace />} />
                 </Routes>
               </main>
