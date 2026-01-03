@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from middleware.auth import get_current_user, require_role
 from utils.database import get_database
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import List, Optional, Dict
 from pydantic import BaseModel
 from models.escalation import Escalation, FollowUpRequest, ResolveRequest, ReEscalateRequest, FollowUp
 import uuid
