@@ -43,6 +43,11 @@ import OfficeNotifications from './pages/office/Notifications';
 import OfficeProfile from './pages/office/Profile';
 import OfficeSettings from './pages/office/Settings';
 
+// Responder pages
+import ResponderDashboard from './pages/responder/Dashboard';
+import ResponderInspections from './pages/responder/Inspections';
+import ResponderInspectionDetail from './pages/responder/InspectionDetail';
+
 const App: React.FC = () => {
   const { isAuthenticated, loading, user } = useAuth();
 
