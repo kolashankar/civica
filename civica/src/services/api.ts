@@ -404,6 +404,16 @@ export const officeApi = {
     const response = await api.put(`/inspections/${inspectionId}/office-response`, data);
     return response.data;
   },
+
+  getHistory: async (officeId: string, params?: any) => {
+    const response = await api.get(`/inspections/office/${officeId}/history`, { params });
+    return response.data;
+  },
+
+  getAnalytics: async (officeId: string, days: number = 30) => {
+    const response = await api.get(`/inspections/office/${officeId}/analytics`, { params: { days } });
+    return response.data;
+  },
 };
 
 export default api;
