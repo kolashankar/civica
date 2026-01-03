@@ -920,3 +920,208 @@ async def re_escalate(
         "escalation_id": escalation_id
     }
 
+
+
+# ============ COMPLIANCE & VIOLATIONS ============
+
+@router.get("/compliance/offices")
+async def get_offices_compliance(
+    skip: int = 0,
+    limit: int = 100,
+    min_score: Optional[float] = None,
+    max_score: Optional[float] = None,
+    office_type: Optional[str] = None,
+    district: Optional[str] = None,
+    sort_by: Optional[str] = "score_desc",  # score_asc, score_desc, name
+    current_user: dict = Depends(require_role(["responder", "admin"]))
+):
+    """Get compliance scores for all offices"""
+    from services.compliance_service import get_all_offices_compliance
+    
+    # Get all offices compliance
+    compliance_data = await get_all_offices_compliance()
+    
+    # Apply filters
+    filtered_data = []
+    for item in compliance_data:
+        office = item["office"]
+        
+        # Office type filter
+        if office_type and office.get("type") != office_type:
+            continue
+        
+        # District filter
+        if district and office.get("district") != district:
+            continue
+        
+        # Score filters
+        if min_score is not None and item["compliance_score"] < min_score:
+            continue
+        if max_score is not None and item["compliance_score"] > max_score:
+            continue
+        
+        filtered_data.append(item)
+    
+    # Sort
+    if sort_by == "score_asc":
+        filtered_data.sort(key=lambda x: x["compliance_score"])
+    elif sort_by == "score_desc":
+        filtered_data.sort(key=lambda x: x["compliance_score"], reverse=True)
+    elif sort_by == "name":
+        filtered_data.sort(key=lambda x: x["office"]["name"])
+    
+    # Pagination
+    total = len(filtered_data)
+    paginated_data = filtered_data[skip:skip + limit]
+    
+    return {
+        "offices": paginated_data,
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
+
+
+@router.get("/compliance/office/{office_id}")
+async def get_office_compliance_detail(
+    office_id: str,
+    current_user: dict = Depends(require_role(["responder", "admin"]))
+):
+    """Get detailed compliance data for a specific office"""
+    from services.compliance_service import calculate_office_compliance, get_office_compliance_history
+    
+    db = get_database()
+    
+    # Get office
+    office = await db.offices.find_one({"_id": office_id})
+    if not office:
+        raise HTTPException(status_code=404, detail="Office not found")
+    
+    # Get compliance data
+    compliance = await calculate_office_compliance(office_id)
+    
+    # Get compliance history (last 6 months)
+    history = await get_office_compliance_history(office_id, months=6)
+    
+    # Get all inspections for this office
+    inspections = await db.inspections.find({"office_id": office_id}).to_list(10000)
+    
+    # Get common issues
+    issue_categories = {}
+    for inspection in inspections:
+        if inspection.get("report") and inspection["report"].get("issues"):
+            issues_text = inspection["report"]["issues"].lower()
+            
+            if any(word in issues_text for word in ["clean", "dirty", "garbage", "waste"]):
+                issue_categories["Cleanliness"] = issue_categories.get("Cleanliness", 0) + 1
+            if any(word in issues_text for word in ["staff", "behavior", "rude"]):
+                issue_categories["Staff Behavior"] = issue_categories.get("Staff Behavior", 0) + 1
+            if any(word in issues_text for word in ["service", "slow", "delay"]):
+                issue_categories["Service Quality"] = issue_categories.get("Service Quality", 0) + 1
+            if any(word in issues_text for word in ["infrastructure", "building", "facility"]):
+                issue_categories["Infrastructure"] = issue_categories.get("Infrastructure", 0) + 1
+    
+    common_issues = [{"category": k, "count": v} for k, v in sorted(issue_categories.items(), key=lambda x: x[1], reverse=True)]
+    
+    return {
+        "office": office,
+        "compliance": compliance,
+        "history": history,
+        "common_issues": common_issues,
+        "total_inspections": len(inspections)
+    }
+
+
+@router.get("/violations")
+async def get_violations(
+    skip: int = 0,
+    limit: int = 50,
+    min_violations: int = 2,
+    severity: Optional[str] = None,
+    current_user: dict = Depends(require_role(["responder", "admin"]))
+):
+    """Get offices with repeated violations"""
+    from services.compliance_service import get_violation_tracking
+    
+    # Get violation data
+    violations = await get_violation_tracking()
+    
+    # Apply filters
+    filtered_violations = []
+    for item in violations:
+        if item["violation_count"] < min_violations:
+            continue
+        
+        if severity and item.get("severity") != severity:
+            continue
+        
+        filtered_violations.append(item)
+    
+    # Pagination
+    total = len(filtered_violations)
+    paginated_violations = filtered_violations[skip:skip + limit]
+    
+    return {
+        "violations": paginated_violations,
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
+
+
+@router.get("/compliance/report/{office_id}")
+async def generate_compliance_report(
+    office_id: str,
+    current_user: dict = Depends(require_role(["responder", "admin"]))
+):
+    """Generate compliance report for an office"""
+    from services.compliance_service import calculate_office_compliance, get_office_compliance_history
+    
+    db = get_database()
+    
+    # Get office
+    office = await db.offices.find_one({"_id": office_id})
+    if not office:
+        raise HTTPException(status_code=404, detail="Office not found")
+    
+    # Get compliance data
+    compliance = await calculate_office_compliance(office_id)
+    
+    # Get compliance history
+    history = await get_office_compliance_history(office_id, months=12)
+    
+    # Get all inspections
+    inspections = await db.inspections.find({"office_id": office_id}).to_list(10000)
+    
+    # Calculate trends
+    recent_inspections = [i for i in inspections if i["assigned_date"] >= (datetime.utcnow() - timedelta(days=90))]
+    
+    # Rating trend
+    recent_ratings = []
+    for inspection in recent_inspections:
+        if inspection.get("report"):
+            report = inspection["report"]
+            if all([report.get("cleanliness_rating"), report.get("staff_behavior_rating"), report.get("service_quality_rating")]):
+                avg_rating = (report["cleanliness_rating"] + report["staff_behavior_rating"] + report["service_quality_rating"]) / 3
+                recent_ratings.append(avg_rating)
+    
+    avg_recent_rating = sum(recent_ratings) / len(recent_ratings) if recent_ratings else 0
+    
+    # Generate report
+    report = {
+        "office": office,
+        "compliance": compliance,
+        "history": history,
+        "summary": {
+            "total_inspections": len(inspections),
+            "recent_inspections_90_days": len(recent_inspections),
+            "avg_recent_rating": round(avg_recent_rating, 2),
+            "compliance_level": "High" if compliance["compliance_score"] >= 80 else "Medium" if compliance["compliance_score"] >= 50 else "Low",
+            "recommendation": "Continue monitoring" if compliance["compliance_score"] >= 80 else "Needs improvement" if compliance["compliance_score"] >= 50 else "Requires immediate action"
+        },
+        "generated_at": datetime.utcnow(),
+        "generated_by": current_user["_id"]
+    }
+    
+    return report
+
