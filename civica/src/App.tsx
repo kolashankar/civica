@@ -145,6 +145,26 @@ const App: React.FC = () => {
         }
       />
       
+      {/* Responder Routes */}
+      <Route
+        path="/responder/*"
+        element={
+          <ProtectedRoute>
+            <div className="flex min-h-screen bg-gray-100">
+              <ResponderSidebar />
+              <main className="flex-1 p-8 overflow-y-auto">
+                <Routes>
+                  <Route path="dashboard" element={<ResponderDashboard />} />
+                  <Route path="inspections" element={<ResponderInspections />} />
+                  <Route path="inspections/:id" element={<ResponderInspectionDetail />} />
+                  <Route path="*" element={<Navigate to="/responder/dashboard" replace />} />
+                </Routes>
+              </main>
+            </div>
+          </ProtectedRoute>
+        }
+      />
+      
       <Route
         path="/"
         element={
@@ -155,6 +175,8 @@ const App: React.FC = () => {
               <Navigate to="/headmaster/dashboard" replace />
             ) : user?.role === 'office' ? (
               <Navigate to="/office/dashboard" replace />
+            ) : user?.role === 'responder' ? (
+              <Navigate to="/responder/dashboard" replace />
             ) : (
               <Navigate to="/login" replace />
             )
