@@ -268,7 +268,7 @@ Configured bottom tab navigation with 4 tabs:
 
 ## Environment Variables
 ```
-EXPO_PUBLIC_BACKEND_URL=https://complyhub-2.preview.emergentagent.com
+EXPO_PUBLIC_BACKEND_URL=https://inspect-portal.preview.emergentagent.com
 ```
 
 All API calls automatically use this URL with `/api` prefix.
