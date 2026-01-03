@@ -126,6 +126,11 @@ const App: React.FC = () => {
                   <Route path="inspections" element={<OfficeInspections />} />
                   <Route path="inspections/:id" element={<OfficeInspectionDetail />} />
                   <Route path="inspections/:id/respond" element={<ResponseForm />} />
+                  <Route path="history" element={<OfficeHistory />} />
+                  <Route path="analytics" element={<OfficeAnalytics />} />
+                  <Route path="notifications" element={<OfficeNotifications />} />
+                  <Route path="profile" element={<OfficeProfile />} />
+                  <Route path="settings" element={<OfficeSettings />} />
                   <Route path="*" element={<Navigate to="/office/dashboard" replace />} />
                 </Routes>
               </main>
