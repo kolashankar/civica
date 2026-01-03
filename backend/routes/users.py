@@ -398,3 +398,128 @@ async def bulk_import_users(
         "created_users": created_users[:10],  # Return first 10 for preview
         "errors": errors[:10]  # Return first 10 errors
     }
+
+
+# Profile & Settings routes
+
+@router.get("/me")
+async def get_current_user_profile(current_user: dict = Depends(get_current_user)):
+    """Get current user's profile"""
+    return current_user
+
+
+@router.put("/me")
+async def update_current_user_profile(
+    user_data: UserUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update current user's profile"""
+    db = get_database()
+    
+    # Build update fields
+    update_fields = {}
+    if user_data.name:
+        update_fields["name"] = user_data.name
+    if user_data.phone is not None:
+        update_fields["phone"] = user_data.phone
+    if user_data.profile_image is not None:
+        update_fields["profile_image"] = user_data.profile_image
+    
+    # Allow custom fields for responder role
+    if current_user.get("role") == "responder":
+        if hasattr(user_data, 'designation') and user_data.designation:
+            update_fields["designation"] = user_data.designation
+        if hasattr(user_data, 'department') and user_data.department:
+            update_fields["department"] = user_data.department
+        if hasattr(user_data, 'jurisdiction') and user_data.jurisdiction:
+            update_fields["jurisdiction"] = user_data.jurisdiction
+    
+    if not update_fields:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    
+    update_fields["updated_at"] = datetime.utcnow()
+    
+    # Update user
+    result = await db.users.update_one(
+        {"_id": current_user["_id"]},
+        {"$set": update_fields}
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Failed to update profile")
+    
+    return {"message": "Profile updated successfully"}
+
+
+@router.get("/settings")
+async def get_user_settings(current_user: dict = Depends(get_current_user)):
+    """Get user's settings"""
+    db = get_database()
+    
+    # Get settings from user document
+    user = await db.users.find_one({"_id": current_user["_id"]})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Return settings or defaults
+    return user.get("settings", {
+        "emailNotifications": True,
+        "escalationAlerts": True,
+        "overdueAlerts": True,
+        "complianceAlerts": True,
+        "violationThreshold": 3,
+        "emailDigest": "daily",
+        "autoReportGeneration": False
+    })
+
+
+@router.put("/settings")
+async def update_user_settings(
+    settings: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update user's settings"""
+    db = get_database()
+    
+    # Update settings
+    result = await db.users.update_one(
+        {"_id": current_user["_id"]},
+        {"$set": {"settings": settings, "updated_at": datetime.utcnow()}}
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Failed to update settings")
+    
+    return {"message": "Settings updated successfully"}
+
+
+@router.post("/change-password")
+async def change_password(
+    password_data: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """Change user's password"""
+    from utils.auth import verify_password
+    
+    db = get_database()
+    
+    # Get current user
+    user = await db.users.find_one({"_id": current_user["_id"]})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Verify current password
+    if not verify_password(password_data.get("current_password", ""), user["password"]):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    
+    # Hash new password
+    new_password_hash = get_password_hash(password_data.get("new_password"))
+    
+    # Update password
+    await db.users.update_one(
+        {"_id": current_user["_id"]},
+        {"$set": {"password": new_password_hash, "updated_at": datetime.utcnow()}}
+    )
+    
+    return {"message": "Password changed successfully"}
+
