@@ -416,4 +416,47 @@ export const officeApi = {
   },
 };
 
+// Responder API (for government responders)
+export const responderApi = {
+  getDashboardStats: async () => {
+    const response = await api.get('/responder/dashboard/stats');
+    return response.data;
+  },
+
+  getPriorityItems: async () => {
+    const response = await api.get('/responder/inspections/priority');
+    return response.data;
+  },
+
+  getRecentActivity: async (limit: number = 20) => {
+    const response = await api.get('/responder/inspections/recent-activity', { params: { limit } });
+    return response.data;
+  },
+
+  getAllInspections: async (params?: any) => {
+    const response = await api.get('/responder/inspections', { params });
+    return response.data;
+  },
+
+  getInspectionFull: async (inspectionId: string) => {
+    const response = await api.get(`/responder/inspections/${inspectionId}/full`);
+    return response.data;
+  },
+
+  submitReview: async (inspectionId: string, data: any) => {
+    const response = await api.post(`/responder/inspections/${inspectionId}/govt-review`, data);
+    return response.data;
+  },
+
+  updateInspectionStatus: async (inspectionId: string, status: string, reason?: string) => {
+    const response = await api.put(`/responder/inspections/${inspectionId}/status`, { status, reason });
+    return response.data;
+  },
+
+  getSystemAnalytics: async (days: number = 30) => {
+    const response = await api.get('/responder/analytics/system', { params: { days } });
+    return response.data;
+  },
+};
+
 export default api;
