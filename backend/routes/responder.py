@@ -663,6 +663,7 @@ async def get_system_analytics(
         "rating_trends": rating_data,
         "response_times": response_time_data,
         "issue_categories": issue_data
+    }
 
 
 # ============ ESCALATION MANAGEMENT ============
