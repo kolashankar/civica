@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime
 
 # Import all route modules
-from routes import auth, schools, offices, users, teams, templates, inspections, analytics, notifications, students
+from routes import auth, schools, offices, users, teams, templates, inspections, analytics, notifications, students, responder
 
 
 ROOT_DIR = Path(__file__).parent
