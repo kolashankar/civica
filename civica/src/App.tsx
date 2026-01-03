@@ -5,6 +5,7 @@ import ProtectedRoute from './components/auth/ProtectedRoute';
 import Sidebar from './components/layout/Sidebar';
 import HeadmasterSidebar from './components/layout/HeadmasterSidebar';
 import OfficeSidebar from './components/layout/OfficeSidebar';
+import ResponderSidebar from './components/layout/ResponderSidebar';
 import LoginPage from './pages/Login';
 
 // Admin pages
