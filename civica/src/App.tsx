@@ -48,6 +48,13 @@ import OfficeSettings from './pages/office/Settings';
 import ResponderDashboard from './pages/responder/Dashboard';
 import ResponderInspections from './pages/responder/Inspections';
 import ResponderInspectionDetail from './pages/responder/InspectionDetail';
+import ResponderEscalations from './pages/responder/Escalations';
+import ResponderEscalationDetail from './pages/responder/EscalationDetail';
+import ResponderCompliance from './pages/responder/Compliance';
+import ResponderComplianceDetail from './pages/responder/ComplianceDetail';
+import ResponderAnalytics from './pages/responder/Analytics';
+import ResponderReports from './pages/responder/Reports';
+import ResponderViolations from './pages/responder/Violations';
 
 const App: React.FC = () => {
   const { isAuthenticated, loading, user } = useAuth();
