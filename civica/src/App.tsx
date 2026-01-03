@@ -37,6 +37,11 @@ import OfficeDashboard from './pages/office/Dashboard';
 import OfficeInspections from './pages/office/Inspections';
 import OfficeInspectionDetail from './pages/office/InspectionDetail';
 import ResponseForm from './pages/office/ResponseForm';
+import OfficeHistory from './pages/office/History';
+import OfficeAnalytics from './pages/office/Analytics';
+import OfficeNotifications from './pages/office/Notifications';
+import OfficeProfile from './pages/office/Profile';
+import OfficeSettings from './pages/office/Settings';
 
 const App: React.FC = () => {
   const { isAuthenticated, loading, user } = useAuth();
