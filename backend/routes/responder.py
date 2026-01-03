@@ -663,4 +663,260 @@ async def get_system_analytics(
         "rating_trends": rating_data,
         "response_times": response_time_data,
         "issue_categories": issue_data
+
+
+# ============ ESCALATION MANAGEMENT ============
+
+@router.get("/escalations")
+async def get_all_escalations(
+    skip: int = 0,
+    limit: int = 50,
+    status: Optional[str] = None,
+    office_id: Optional[str] = None,
+    escalation_reason: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    severity: Optional[str] = None,
+    sort_by: Optional[str] = "date_desc",  # date_asc, date_desc, severity
+    current_user: dict = Depends(require_role(["responder", "admin"]))
+):
+    """Get all escalations with filters"""
+    db = get_database()
+    
+    # Build query
+    query = {}
+    
+    if status:
+        query["status"] = status
+    if office_id:
+        query["office_id"] = office_id
+    if escalation_reason:
+        query["escalation_reason"] = escalation_reason
+    if severity:
+        query["severity"] = severity
+    if date_from:
+        query["escalated_at"] = {"$gte": datetime.fromisoformat(date_from)}
+    if date_to:
+        if "escalated_at" in query:
+            query["escalated_at"]["$lte"] = datetime.fromisoformat(date_to)
+        else:
+            query["escalated_at"] = {"$lte": datetime.fromisoformat(date_to)}
+    
+    # Get all matching escalations
+    escalations = await db.escalations.find(query).to_list(10000)
+    
+    # Enrich with inspection and related data
+    enriched_escalations = []
+    for escalation in escalations:
+        # Get inspection
+        inspection = await db.inspections.find_one({"_id": escalation["inspection_id"]})
+        if inspection:
+            office = await db.offices.find_one({"_id": inspection["office_id"]})
+            school = await db.schools.find_one({"_id": inspection["school_id"]})
+            
+            escalation["inspection"] = inspection
+            escalation["office"] = office
+            escalation["school"] = school
+            
+            # Get escalated_by user
+            escalated_by_user = await db.users.find_one({"_id": escalation["escalated_by"]})
+            escalation["escalated_by_user"] = escalated_by_user
+            
+            enriched_escalations.append(escalation)
+    
+    # Sort escalations
+    if sort_by == "date_asc":
+        enriched_escalations.sort(key=lambda x: x["escalated_at"])
+    elif sort_by == "date_desc":
+        enriched_escalations.sort(key=lambda x: x["escalated_at"], reverse=True)
+    elif sort_by == "severity":
+        severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+        enriched_escalations.sort(key=lambda x: severity_order.get(x.get("severity", "medium"), 4))
+    
+    # Pagination
+    total = len(enriched_escalations)
+    paginated_escalations = enriched_escalations[skip:skip + limit]
+    
+    return {
+        "escalations": paginated_escalations,
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
+
+
+@router.get("/escalations/{escalation_id}")
+async def get_escalation_detail(
+    escalation_id: str,
+    current_user: dict = Depends(require_role(["responder", "admin"]))
+):
+    """Get complete escalation details"""
+    db = get_database()
+    
+    escalation = await db.escalations.find_one({"_id": escalation_id})
+    if not escalation:
+        raise HTTPException(status_code=404, detail="Escalation not found")
+    
+    # Get inspection with full details
+    inspection = await db.inspections.find_one({"_id": escalation["inspection_id"]})
+    if inspection:
+        office = await db.offices.find_one({"_id": inspection["office_id"]})
+        school = await db.schools.find_one({"_id": inspection["school_id"]})
+        team = await db.teams.find_one({"_id": inspection["team_id"]})
+        
+        escalation["inspection"] = inspection
+        escalation["office"] = office
+        escalation["school"] = school
+        escalation["team"] = team
+    
+    # Get escalated_by user
+    escalated_by_user = await db.users.find_one({"_id": escalation["escalated_by"]})
+    escalation["escalated_by_user"] = escalated_by_user
+    
+    # Get resolved_by user if resolved
+    if escalation.get("resolved_by"):
+        resolved_by_user = await db.users.find_one({"_id": escalation["resolved_by"]})
+        escalation["resolved_by_user"] = resolved_by_user
+    
+    # Enrich follow-ups with user data
+    if escalation.get("follow_ups"):
+        for follow_up in escalation["follow_ups"]:
+            user = await db.users.find_one({"_id": follow_up["added_by"]})
+            follow_up["user"] = user
+    
+    return escalation
+
+
+@router.post("/escalations/{escalation_id}/follow-up")
+async def add_follow_up(
+    escalation_id: str,
+    follow_up_data: FollowUpRequest,
+    current_user: dict = Depends(require_role(["responder", "admin"]))
+):
+    """Add a follow-up to an escalation"""
+    db = get_database()
+    
+    escalation = await db.escalations.find_one({"_id": escalation_id})
+    if not escalation:
+        raise HTTPException(status_code=404, detail="Escalation not found")
+    
+    if escalation["status"] == "resolved":
+        raise HTTPException(status_code=400, detail="Cannot add follow-up to resolved escalation")
+    
+    # Create follow-up
+    follow_up = {
+        "notes": follow_up_data.notes,
+        "added_by": current_user["_id"],
+        "added_at": datetime.utcnow(),
+        "action_taken": follow_up_data.action_taken
+    }
+    
+    # Add follow-up to escalation
+    await db.escalations.update_one(
+        {"_id": escalation_id},
+        {
+            "$push": {"follow_ups": follow_up},
+            "$set": {
+                "status": "in_progress",
+                "updated_at": datetime.utcnow()
+            }
+        }
+    )
+    
+    return {
+        "message": "Follow-up added successfully",
+        "escalation_id": escalation_id
+    }
+
+
+@router.put("/escalations/{escalation_id}/resolve")
+async def resolve_escalation(
+    escalation_id: str,
+    resolve_data: ResolveRequest,
+    current_user: dict = Depends(require_role(["responder", "admin"]))
+):
+    """Mark escalation as resolved"""
+    db = get_database()
+    
+    escalation = await db.escalations.find_one({"_id": escalation_id})
+    if not escalation:
+        raise HTTPException(status_code=404, detail="Escalation not found")
+    
+    if escalation["status"] == "resolved":
+        raise HTTPException(status_code=400, detail="Escalation is already resolved")
+    
+    if len(resolve_data.resolution_notes) < 30:
+        raise HTTPException(status_code=400, detail="Resolution notes must be at least 30 characters")
+    
+    # Update escalation
+    await db.escalations.update_one(
+        {"_id": escalation_id},
+        {
+            "$set": {
+                "status": "resolved",
+                "resolution_notes": resolve_data.resolution_notes,
+                "resolved_at": datetime.utcnow(),
+                "resolved_by": current_user["_id"],
+                "updated_at": datetime.utcnow()
+            }
+        }
+    )
+    
+    # Update inspection status to closed
+    await db.inspections.update_one(
+        {"_id": escalation["inspection_id"]},
+        {"$set": {"status": "closed"}}
+    )
+    
+    return {
+        "message": "Escalation resolved successfully",
+        "escalation_id": escalation_id
+    }
+
+
+@router.post("/escalations/{escalation_id}/re-escalate")
+async def re_escalate(
+    escalation_id: str,
+    re_escalate_data: ReEscalateRequest,
+    current_user: dict = Depends(require_role(["responder", "admin"]))
+):
+    """Re-escalate to higher authority"""
+    db = get_database()
+    
+    escalation = await db.escalations.find_one({"_id": escalation_id})
+    if not escalation:
+        raise HTTPException(status_code=404, detail="Escalation not found")
+    
+    if escalation["status"] == "resolved":
+        raise HTTPException(status_code=400, detail="Cannot re-escalate resolved escalation")
+    
+    if len(re_escalate_data.re_escalation_reason) < 30:
+        raise HTTPException(status_code=400, detail="Re-escalation reason must be at least 30 characters")
+    
+    # Update escalation
+    await db.escalations.update_one(
+        {"_id": escalation_id},
+        {
+            "$set": {
+                "status": "re_escalated",
+                "re_escalation_reason": re_escalate_data.re_escalation_reason,
+                "re_escalated_to": re_escalate_data.escalated_to,
+                "updated_at": datetime.utcnow()
+            },
+            "$push": {
+                "follow_ups": {
+                    "notes": f"Re-escalated: {re_escalate_data.re_escalation_reason}",
+                    "added_by": current_user["_id"],
+                    "added_at": datetime.utcnow(),
+                    "action_taken": "re_escalated"
+                }
+            }
+        }
+    )
+    
+    return {
+        "message": "Escalation re-escalated successfully",
+        "escalation_id": escalation_id
+    }
+
     }
