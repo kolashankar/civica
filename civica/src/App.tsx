@@ -55,6 +55,9 @@ import ResponderComplianceDetail from './pages/responder/ComplianceDetail';
 import ResponderAnalytics from './pages/responder/Analytics';
 import ResponderReports from './pages/responder/Reports';
 import ResponderViolations from './pages/responder/Violations';
+import ResponderNotifications from './pages/responder/Notifications';
+import ResponderProfile from './pages/responder/Profile';
+import ResponderSettings from './pages/responder/Settings';
 
 const App: React.FC = () => {
   const { isAuthenticated, loading, user } = useAuth();
