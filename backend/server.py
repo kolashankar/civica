@@ -66,6 +66,7 @@ app.include_router(inspections.router)
 app.include_router(analytics.router)
 app.include_router(notifications.router)
 app.include_router(students.router)
+app.include_router(responder.router)
 
 # Include the router in the main app
 app.include_router(api_router)
