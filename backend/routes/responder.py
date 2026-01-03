@@ -920,4 +920,3 @@ async def re_escalate(
         "escalation_id": escalation_id
     }
 
-    }
