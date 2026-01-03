@@ -8,7 +8,7 @@ import json
 import uuid
 from datetime import datetime, timedelta
 
-BACKEND_URL = "https://inspect-portal.preview.emergentagent.com/api"
+BACKEND_URL = "https://compliance-central-6.preview.emergentagent.com/api"
 TEST_USER_EMAIL = "responder.test@gov.in"
 TEST_USER_PASSWORD = "TestPass123!"
 
