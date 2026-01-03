@@ -354,6 +354,182 @@ async def edit_office_response(
     return {"message": "Office response updated successfully"}
 
 
+@router.get("/office/{office_id}/history")
+async def get_office_response_history(
+    office_id: str,
+    status: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    school_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get response history for an office with filters"""
+    db = get_database()
+    
+    # Verify user belongs to the office or is admin
+    if current_user.get("role") == "office":
+        if current_user.get("office_id") != office_id:
+            raise HTTPException(status_code=403, detail="Not authorized to view this office's history")
+    elif current_user.get("role") not in ["admin", "responder"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    # Build query - only get inspections with office responses
+    query = {
+        "office_id": office_id,
+        "office_response": {"$exists": True}
+    }
+    
+    # Apply filters
+    if status:
+        query["status"] = status
+    if school_id:
+        query["school_id"] = school_id
+    if date_from or date_to:
+        query["office_response.responded_at"] = {}
+        if date_from:
+            query["office_response.responded_at"]["$gte"] = datetime.fromisoformat(date_from)
+        if date_to:
+            query["office_response.responded_at"]["$lte"] = datetime.fromisoformat(date_to)
+    
+    # Get inspections
+    inspections = await db.inspections.find(query).sort("office_response.responded_at", -1).to_list(1000)
+    
+    # Enrich with school and team data
+    for inspection in inspections:
+        school = await db.schools.find_one({"_id": inspection["school_id"]})
+        team = await db.teams.find_one({"_id": inspection["team_id"]})
+        
+        inspection["school"] = school
+        inspection["team"] = team
+    
+    return inspections
+
+
+@router.get("/office/{office_id}/analytics")
+async def get_office_analytics(
+    office_id: str,
+    days: int = 30,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get analytics for office dashboard"""
+    db = get_database()
+    
+    # Verify user belongs to the office or is admin
+    if current_user.get("role") == "office":
+        if current_user.get("office_id") != office_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+    elif current_user.get("role") not in ["admin", "responder"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    # Get all inspections for this office
+    all_inspections = await db.inspections.find({"office_id": office_id}).to_list(1000)
+    
+    # Calculate basic stats
+    total = len(all_inspections)
+    responded = len([i for i in all_inspections if i.get("office_response")])
+    
+    # Rating trends over time (last N days)
+    start_date = datetime.utcnow() - timedelta(days=days)
+    rating_trends = {}
+    
+    for inspection in all_inspections:
+        if inspection.get("report") and inspection["report"].get("submitted_at"):
+            submitted_at = inspection["report"]["submitted_at"]
+            if submitted_at >= start_date:
+                date_key = submitted_at.strftime("%Y-%m-%d")
+                if date_key not in rating_trends:
+                    rating_trends[date_key] = {"ratings": [], "count": 0}
+                
+                report = inspection["report"]
+                if all([report.get("cleanliness_rating"), report.get("staff_behavior_rating"), report.get("service_quality_rating")]):
+                    avg_rating = (report["cleanliness_rating"] + report["staff_behavior_rating"] + report["service_quality_rating"]) / 3
+                    rating_trends[date_key]["ratings"].append(avg_rating)
+                    rating_trends[date_key]["count"] += 1
+    
+    # Calculate average rating per day
+    rating_data = []
+    for date_key, data in sorted(rating_trends.items()):
+        if data["ratings"]:
+            avg = sum(data["ratings"]) / len(data["ratings"])
+            rating_data.append({
+                "date": date_key,
+                "average_rating": round(avg, 2),
+                "count": data["count"]
+            })
+    
+    # Issue categories
+    issue_categories = {}
+    for inspection in all_inspections:
+        if inspection.get("report") and inspection["report"].get("issues"):
+            issues_text = inspection["report"]["issues"].lower()
+            
+            # Simple keyword categorization
+            if any(word in issues_text for word in ["clean", "dirty", "garbage", "waste", "hygiene"]):
+                issue_categories["Cleanliness"] = issue_categories.get("Cleanliness", 0) + 1
+            if any(word in issues_text for word in ["staff", "behavior", "rude", "attitude"]):
+                issue_categories["Staff Behavior"] = issue_categories.get("Staff Behavior", 0) + 1
+            if any(word in issues_text for word in ["service", "slow", "delay", "queue", "waiting"]):
+                issue_categories["Service Quality"] = issue_categories.get("Service Quality", 0) + 1
+            if any(word in issues_text for word in ["infrastructure", "building", "facility", "equipment"]):
+                issue_categories["Infrastructure"] = issue_categories.get("Infrastructure", 0) + 1
+            
+            # If no category matched, count as "Other"
+            if not any([
+                any(word in issues_text for word in ["clean", "dirty", "garbage", "waste", "hygiene"]),
+                any(word in issues_text for word in ["staff", "behavior", "rude", "attitude"]),
+                any(word in issues_text for word in ["service", "slow", "delay", "queue", "waiting"]),
+                any(word in issues_text for word in ["infrastructure", "building", "facility", "equipment"])
+            ]):
+                issue_categories["Other"] = issue_categories.get("Other", 0) + 1
+    
+    issue_data = [{"category": k, "count": v} for k, v in issue_categories.items()]
+    
+    # Response time analysis
+    response_times = []
+    for inspection in all_inspections:
+        if inspection.get("report") and inspection.get("office_response"):
+            submitted_at = inspection["report"].get("submitted_at")
+            responded_at = inspection["office_response"].get("responded_at")
+            
+            if submitted_at and responded_at:
+                time_diff = (responded_at - submitted_at).days
+                response_times.append(time_diff)
+    
+    # Group response times into buckets
+    response_time_buckets = {
+        "0-3 days": 0,
+        "4-7 days": 0,
+        "8-14 days": 0,
+        "15+ days": 0
+    }
+    
+    for rt in response_times:
+        if rt <= 3:
+            response_time_buckets["0-3 days"] += 1
+        elif rt <= 7:
+            response_time_buckets["4-7 days"] += 1
+        elif rt <= 14:
+            response_time_buckets["8-14 days"] += 1
+        else:
+            response_time_buckets["15+ days"] += 1
+    
+    response_time_data = [{"bucket": k, "count": v} for k, v in response_time_buckets.items()]
+    
+    avg_response_time = round(sum(response_times) / len(response_times), 1) if response_times else 0
+    
+    return {
+        "stats": {
+            "total_inspections": total,
+            "total_responses": responded,
+            "response_rate": round((responded / total * 100), 1) if total > 0 else 0,
+            "avg_response_time": avg_response_time
+        },
+        "rating_trends": rating_data,
+        "issue_categories": issue_data,
+        "response_times": response_time_data
+    }
+
+
 # ============ HEADMASTER ROUTES ============
 
 @router.post("/{inspection_id}/approve")
