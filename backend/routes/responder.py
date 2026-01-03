@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 from pydantic import BaseModel
 
-router = APIRouter(prefix="/api/responder", tags=["responder"])
+router = APIRouter(prefix="/responder", tags=["responder"])
 
 
 class GovtReviewRequest(BaseModel):
