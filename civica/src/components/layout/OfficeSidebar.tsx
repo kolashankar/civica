@@ -1,12 +1,13 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, ClipboardList, History, Bell, User, Settings } from 'lucide-react';
+import { LayoutDashboard, ClipboardList, History, BarChart3, Bell, User, Settings } from 'lucide-react';
 
 const OfficeSidebar: React.FC = () => {
   const navItems = [
     { to: '/office/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/office/inspections', icon: ClipboardList, label: 'Inspections' },
     { to: '/office/history', icon: History, label: 'Response History' },
+    { to: '/office/analytics', icon: BarChart3, label: 'Analytics' },
     { to: '/office/notifications', icon: Bell, label: 'Notifications' },
     { to: '/office/profile', icon: User, label: 'Profile' },
     { to: '/office/settings', icon: Settings, label: 'Settings' },
