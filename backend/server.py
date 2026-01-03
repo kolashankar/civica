@@ -10,6 +10,9 @@ from typing import List
 import uuid
 from datetime import datetime
 
+# Import all route modules
+from routes import auth, schools, offices, users, teams, templates, inspections, analytics, notifications, students
+
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -51,6 +54,18 @@ async def create_status_check(input: StatusCheckCreate):
 async def get_status_checks():
     status_checks = await db.status_checks.find().to_list(1000)
     return [StatusCheck(**status_check) for status_check in status_checks]
+
+# Include all route modules
+app.include_router(auth.router)
+app.include_router(schools.router)
+app.include_router(offices.router)
+app.include_router(users.router)
+app.include_router(teams.router)
+app.include_router(templates.router)
+app.include_router(inspections.router)
+app.include_router(analytics.router)
+app.include_router(notifications.router)
+app.include_router(students.router)
 
 # Include the router in the main app
 app.include_router(api_router)
