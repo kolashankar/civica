@@ -367,55 +367,125 @@ frontend/src/components/office/
 
 ---
 
-### Phase 4: Response History (Week 4)
+### Phase 4: Response History (Week 4) ✅ **COMPLETED**
 **Goal**: Track response history
 
 **Tasks**:
-1. Create history page
-2. List all responses
-3. Add filters
-4. Export functionality
-5. View detail from history
+1. ✅ Create history page
+2. ✅ List all responses
+3. ✅ Add filters
+4. ✅ Export functionality
+5. ✅ View detail from history
 
 **Testing**:
-- History loads correctly
-- Filters work
-- Export works
+- ✅ History loads correctly
+- ✅ Filters work
+- ✅ Export works
+
+**Implementation Details**:
+- **Backend Routes Added**:
+  - `GET /api/inspections/office/:office_id/history` - Get response history with filters
+  - Supports filters: date range, review status, school
+- **Frontend Components Created**:
+  - `History.tsx` - Response history page with advanced filtering
+- **Features Implemented**:
+  - List all submitted responses with inspection details
+  - Search by task name, school, or team
+  - Filter by review status (All, Reviewed, Pending Review)
+  - Date range filtering (from/to dates)
+  - Export to CSV functionality with full response details
+  - View details link to inspection page
+  - Results count display
+  - Clear filters option
 
 ---
 
-### Phase 5: Analytics Dashboard (Week 5)
+### Phase 5: Analytics Dashboard (Week 5) ✅ **COMPLETED**
 **Goal**: Office performance analytics
 
 **Tasks**:
-1. Analytics service
-2. Analytics routes
-3. Build analytics dashboard
-4. Rating trends chart
-5. Issue categories chart
-6. Response time chart
+1. ✅ Analytics service
+2. ✅ Analytics routes
+3. ✅ Build analytics dashboard
+4. ✅ Rating trends chart
+5. ✅ Issue categories chart
+6. ✅ Response time chart
 
 **Testing**:
-- Analytics display correctly
-- Charts render properly
-- Data is accurate
+- ✅ Analytics display correctly
+- ✅ Charts render properly
+- ✅ Data is accurate
+
+**Implementation Details**:
+- **Backend Routes Added**:
+  - `GET /api/inspections/office/:office_id/analytics` - Get office performance metrics
+  - Returns: rating trends, issue categories, response time distribution
+  - Supports time range filter (days parameter)
+- **Frontend Components Created**:
+  - `Analytics.tsx` - Comprehensive analytics dashboard with charts
+- **Features Implemented**:
+  - 4 Key Stats Cards:
+    * Total Inspections
+    * Total Responses
+    * Response Rate (%)
+    * Average Response Time (days)
+  - 3 Interactive Charts (using Recharts):
+    * **Rating Trends Over Time** (Line Chart) - Track average ratings daily
+    * **Issue Categories** (Pie Chart) - Distribution of common issues
+    * **Response Time Distribution** (Bar Chart) - Time buckets (0-3, 4-7, 8-14, 15+ days)
+  - Time range selector (7, 30, 90, 180, 365 days)
+  - Insights & Recommendations section with actionable tips
+  - Automatic issue categorization (Cleanliness, Staff Behavior, Service Quality, Infrastructure, Other)
 
 ---
 
-### Phase 6: Notifications & Profile (Week 6)
+### Phase 6: Notifications & Profile (Week 6) ✅ **COMPLETED**
 **Goal**: Complete notifications and profile
 
 **Tasks**:
-1. Notification system
-2. Notification center UI
-3. Profile page
-4. Settings page
-5. Change password
+1. ✅ Notification system
+2. ✅ Notification center UI
+3. ✅ Profile page
+4. ✅ Settings page
+5. ✅ Change password
 
 **Testing**:
-- Notifications work
-- Profile displays
-- Settings save
+- ✅ Notifications work
+- ✅ Profile displays
+- ✅ Settings save
+
+**Implementation Details**:
+- **Backend Routes** (Already existed, integrated):
+  - `GET /api/notifications` - Get user notifications
+  - `GET /api/notifications/unread-count` - Get unread count
+  - `POST /api/notifications/:id/read` - Mark as read
+  - `POST /api/notifications/mark-all-read` - Mark all as read
+  - `POST /api/auth/change-password` - Change password
+- **Frontend Components Created**:
+  - `Notifications.tsx` - Notification center with read/unread states
+  - `Profile.tsx` - User and office profile display
+  - `Settings.tsx` - Account settings and password change
+- **Features Implemented**:
+  - **Notifications**:
+    * List all notifications with color-coded types
+    * Icons and visual indicators for different notification types
+    * Mark individual notifications as read
+    * Mark all as read button
+    * Unread badge count display
+    * Timestamp display with relative dates
+  - **Profile**:
+    * User information card with avatar
+    * Role badge display
+    * Office details (name, type, address, contact)
+    * Member since date
+  - **Settings**:
+    * Account information summary
+    * Change password form with validation
+    * Show/hide password toggles
+    * Password strength indicator (Weak/Medium/Strong)
+    * Password confirmation matching
+    * Success/error messaging
+    * Security tips section
 
 ---
 
