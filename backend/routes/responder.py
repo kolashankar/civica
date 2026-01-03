@@ -4,6 +4,8 @@ from utils.database import get_database
 from datetime import datetime, timedelta
 from typing import List, Optional
 from pydantic import BaseModel
+from models.escalation import Escalation, FollowUpRequest, ResolveRequest, ReEscalateRequest, FollowUp
+import uuid
 
 router = APIRouter(prefix="/responder", tags=["responder"])
 
