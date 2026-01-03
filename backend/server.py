@@ -55,18 +55,18 @@ async def get_status_checks():
     status_checks = await db.status_checks.find().to_list(1000)
     return [StatusCheck(**status_check) for status_check in status_checks]
 
-# Include all route modules
-app.include_router(auth.router)
-app.include_router(schools.router)
-app.include_router(offices.router)
-app.include_router(users.router)
-app.include_router(teams.router)
-app.include_router(templates.router)
-app.include_router(inspections.router)
-app.include_router(analytics.router)
-app.include_router(notifications.router)
-app.include_router(students.router)
-app.include_router(responder.router)
+# Include all route modules in the api_router
+api_router.include_router(auth.router)
+api_router.include_router(schools.router)
+api_router.include_router(offices.router)
+api_router.include_router(users.router)
+api_router.include_router(teams.router)
+api_router.include_router(templates.router)
+api_router.include_router(inspections.router)
+api_router.include_router(analytics.router)
+api_router.include_router(notifications.router)
+api_router.include_router(students.router)
+api_router.include_router(responder.router)
 
 # Include the router in the main app
 app.include_router(api_router)
