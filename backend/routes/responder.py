@@ -1125,3 +1125,283 @@ async def generate_compliance_report(
     
     return report
 
+
+
+# ============ ADVANCED ANALYTICS & REPORTING ============
+
+@router.get("/analytics/detailed")
+async def get_detailed_analytics(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    office_type: Optional[str] = None,
+    district: Optional[str] = None,
+    current_user: dict = Depends(require_role(["responder", "admin"]))
+):
+    """Get detailed analytics with custom filters"""
+    db = get_database()
+    
+    # Build date filter
+    date_filter = {}
+    if date_from:
+        date_filter["$gte"] = datetime.fromisoformat(date_from)
+    if date_to:
+        if "$gte" in date_filter:
+            date_filter["$lte"] = datetime.fromisoformat(date_to)
+        else:
+            date_filter = {"$lte": datetime.fromisoformat(date_to)}
+    
+    # Build query
+    query = {}
+    if date_filter:
+        query["assigned_date"] = date_filter
+    
+    # Get inspections
+    all_inspections = await db.inspections.find(query).to_list(10000)
+    
+    # Filter by office type or district if needed
+    if office_type or district:
+        filtered_inspections = []
+        for inspection in all_inspections:
+            office = await db.offices.find_one({"_id": inspection["office_id"]})
+            if office:
+                if office_type and office.get("type") != office_type:
+                    continue
+                if district and office.get("district") != district:
+                    continue
+                filtered_inspections.append(inspection)
+        all_inspections = filtered_inspections
+    
+    # Calculate comprehensive metrics
+    total_inspections = len(all_inspections)
+    
+    # Status breakdown
+    status_counts = {}
+    for inspection in all_inspections:
+        status = inspection["status"]
+        status_counts[status] = status_counts.get(status, 0) + 1
+    
+    # Rating analysis
+    ratings = []
+    rating_by_category = {"cleanliness": [], "behavior": [], "service": []}
+    for inspection in all_inspections:
+        if inspection.get("report"):
+            report = inspection["report"]
+            if report.get("cleanliness_rating"):
+                rating_by_category["cleanliness"].append(report["cleanliness_rating"])
+            if report.get("staff_behavior_rating"):
+                rating_by_category["behavior"].append(report["staff_behavior_rating"])
+            if report.get("service_quality_rating"):
+                rating_by_category["service"].append(report["service_quality_rating"])
+            
+            if all([report.get("cleanliness_rating"), report.get("staff_behavior_rating"), report.get("service_quality_rating")]):
+                avg_rating = (report["cleanliness_rating"] + report["staff_behavior_rating"] + report["service_quality_rating"]) / 3
+                ratings.append(avg_rating)
+    
+    # Response time analysis
+    response_times = []
+    for inspection in all_inspections:
+        if inspection.get("report") and inspection.get("office_response"):
+            submitted_at = inspection["report"].get("submitted_at")
+            responded_at = inspection["office_response"].get("responded_at")
+            if submitted_at and responded_at:
+                time_diff = (responded_at - submitted_at).days
+                response_times.append(time_diff)
+    
+    # District performance
+    district_performance = {}
+    for inspection in all_inspections:
+        office = await db.offices.find_one({"_id": inspection["office_id"]})
+        if office and office.get("district"):
+            dist = office["district"]
+            if dist not in district_performance:
+                district_performance[dist] = {"total": 0, "responded": 0, "closed": 0, "ratings": []}
+            
+            district_performance[dist]["total"] += 1
+            if inspection.get("office_response"):
+                district_performance[dist]["responded"] += 1
+            if inspection["status"] == "closed":
+                district_performance[dist]["closed"] += 1
+            
+            if inspection.get("report"):
+                report = inspection["report"]
+                if all([report.get("cleanliness_rating"), report.get("staff_behavior_rating"), report.get("service_quality_rating")]):
+                    avg_rating = (report["cleanliness_rating"] + report["staff_behavior_rating"] + report["service_quality_rating"]) / 3
+                    district_performance[dist]["ratings"].append(avg_rating)
+    
+    district_data = []
+    for district_name, data in district_performance.items():
+        district_data.append({
+            "district": district_name,
+            "total_inspections": data["total"],
+            "response_rate": round((data["responded"] / data["total"] * 100), 1) if data["total"] > 0 else 0,
+            "resolution_rate": round((data["closed"] / data["total"] * 100), 1) if data["total"] > 0 else 0,
+            "avg_rating": round(sum(data["ratings"]) / len(data["ratings"]), 2) if data["ratings"] else 0
+        })
+    
+    district_data.sort(key=lambda x: x["avg_rating"], reverse=True)
+    
+    return {
+        "summary": {
+            "total_inspections": total_inspections,
+            "avg_rating": round(sum(ratings) / len(ratings), 2) if ratings else 0,
+            "avg_response_time_days": round(sum(response_times) / len(response_times), 1) if response_times else 0,
+            "on_time_response_rate": round(len([rt for rt in response_times if rt <= 7]) / len(response_times) * 100, 1) if response_times else 0
+        },
+        "status_breakdown": status_counts,
+        "rating_by_category": {
+            "cleanliness": round(sum(rating_by_category["cleanliness"]) / len(rating_by_category["cleanliness"]), 2) if rating_by_category["cleanliness"] else 0,
+            "behavior": round(sum(rating_by_category["behavior"]) / len(rating_by_category["behavior"]), 2) if rating_by_category["behavior"] else 0,
+            "service": round(sum(rating_by_category["service"]) / len(rating_by_category["service"]), 2) if rating_by_category["service"] else 0
+        },
+        "response_time_distribution": {
+            "0-3 days": len([rt for rt in response_times if rt <= 3]),
+            "4-7 days": len([rt for rt in response_times if 4 <= rt <= 7]),
+            "8-14 days": len([rt for rt in response_times if 8 <= rt <= 14]),
+            "15+ days": len([rt for rt in response_times if rt > 14])
+        },
+        "district_performance": district_data
+    }
+
+
+@router.post("/reports/generate")
+async def generate_custom_report(
+    report_type: str,  # system, office, school, district
+    entity_ids: Optional[List[str]] = [],
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    metrics: Optional[List[str]] = [],  # inspections, ratings, compliance, response_time
+    current_user: dict = Depends(require_role(["responder", "admin"]))
+):
+    """Generate custom report"""
+    db = get_database()
+    
+    # Build date filter
+    date_filter = {}
+    if date_from:
+        date_filter["$gte"] = datetime.fromisoformat(date_from)
+    if date_to:
+        if "$gte" in date_filter:
+            date_filter["$lte"] = datetime.fromisoformat(date_to)
+        else:
+            date_filter = {"$lte": datetime.fromisoformat(date_to)}
+    
+    # Build query based on report type
+    query = {}
+    if date_filter:
+        query["assigned_date"] = date_filter
+    
+    if report_type == "office" and entity_ids:
+        query["office_id"] = {"$in": entity_ids}
+    elif report_type == "school" and entity_ids:
+        query["school_id"] = {"$in": entity_ids}
+    
+    # Get inspections
+    inspections = await db.inspections.find(query).to_list(10000)
+    
+    # Calculate metrics
+    report_data = {
+        "report_type": report_type,
+        "date_range": {"from": date_from, "to": date_to},
+        "generated_at": datetime.utcnow(),
+        "generated_by": current_user["_id"],
+        "total_inspections": len(inspections)
+    }
+    
+    # Add requested metrics
+    if not metrics or "inspections" in metrics:
+        report_data["inspection_summary"] = {
+            "total": len(inspections),
+            "by_status": {}
+        }
+        for inspection in inspections:
+            status = inspection["status"]
+            if status not in report_data["inspection_summary"]["by_status"]:
+                report_data["inspection_summary"]["by_status"][status] = 0
+            report_data["inspection_summary"]["by_status"][status] += 1
+    
+    if not metrics or "ratings" in metrics:
+        ratings = []
+        for inspection in inspections:
+            if inspection.get("report"):
+                report = inspection["report"]
+                if all([report.get("cleanliness_rating"), report.get("staff_behavior_rating"), report.get("service_quality_rating")]):
+                    avg_rating = (report["cleanliness_rating"] + report["staff_behavior_rating"] + report["service_quality_rating"]) / 3
+                    ratings.append(avg_rating)
+        
+        report_data["rating_summary"] = {
+            "avg_rating": round(sum(ratings) / len(ratings), 2) if ratings else 0,
+            "total_rated": len(ratings),
+            "rating_distribution": {
+                "5_star": len([r for r in ratings if r >= 4.5]),
+                "4_star": len([r for r in ratings if 3.5 <= r < 4.5]),
+                "3_star": len([r for r in ratings if 2.5 <= r < 3.5]),
+                "2_star": len([r for r in ratings if 1.5 <= r < 2.5]),
+                "1_star": len([r for r in ratings if r < 1.5])
+            }
+        }
+    
+    if not metrics or "response_time" in metrics:
+        response_times = []
+        for inspection in inspections:
+            if inspection.get("report") and inspection.get("office_response"):
+                submitted_at = inspection["report"].get("submitted_at")
+                responded_at = inspection["office_response"].get("responded_at")
+                if submitted_at and responded_at:
+                    time_diff = (responded_at - submitted_at).days
+                    response_times.append(time_diff)
+        
+        report_data["response_time_summary"] = {
+            "avg_response_time_days": round(sum(response_times) / len(response_times), 1) if response_times else 0,
+            "on_time_count": len([rt for rt in response_times if rt <= 7]),
+            "on_time_rate": round(len([rt for rt in response_times if rt <= 7]) / len(response_times) * 100, 1) if response_times else 0
+        }
+    
+    return report_data
+
+
+@router.post("/reports/export")
+async def export_report_data(
+    export_format: str,  # json, csv
+    data_type: str,  # inspections, offices, schools
+    filters: Optional[Dict] = {},
+    current_user: dict = Depends(require_role(["responder", "admin"]))
+):
+    """Export data in specified format"""
+    db = get_database()
+    
+    # Get data based on type
+    if data_type == "inspections":
+        query = {}
+        if filters.get("status"):
+            query["status"] = filters["status"]
+        if filters.get("office_id"):
+            query["office_id"] = filters["office_id"]
+        
+        data = await db.inspections.find(query).to_list(10000)
+    elif data_type == "offices":
+        data = await db.offices.find({}).to_list(1000)
+    elif data_type == "schools":
+        data = await db.schools.find({}).to_list(1000)
+    else:
+        raise HTTPException(status_code=400, detail="Invalid data type")
+    
+    # Format data
+    if export_format == "json":
+        return {
+            "format": "json",
+            "data": data,
+            "count": len(data),
+            "exported_at": datetime.utcnow()
+        }
+    elif export_format == "csv":
+        # For CSV, return structured data that frontend can convert
+        return {
+            "format": "csv",
+            "data": data,
+            "count": len(data),
+            "exported_at": datetime.utcnow(),
+            "message": "CSV data ready for download"
+        }
+    else:
+        raise HTTPException(status_code=400, detail="Invalid export format")
+
